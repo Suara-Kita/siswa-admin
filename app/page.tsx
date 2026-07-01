@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import WhatsAppModal from '@/components/WhatsAppModal';
+import { buildDefaultMessage, isLikelyValidPhone } from '@/lib/whatsapp';
 
 interface Siswa {
   id: string;
@@ -8,8 +10,8 @@ interface Siswa {
   nama: string;
   alamat: string;
   ipta: string;
-  no_tel: string;
-  alt_number: string;
+  no_tel: string | null;
+  alt_number: string | null;
   email: string;
   daerah_mengundi: string;
   lokaliti: string;
@@ -18,6 +20,28 @@ interface Siswa {
   source_document: string;
   created_at: string;
   age: number;
+}
+
+interface PhoneCellProps {
+  row: Siswa;
+  phone: string | null;
+  onOpen: (e: React.MouseEvent<HTMLButtonElement>, row: Siswa, phone: string) => void;
+}
+
+function PhoneCell({ row, phone, onOpen }: PhoneCellProps) {
+  if (!isLikelyValidPhone(phone)) {
+    return <span className="text-gray-600">{phone || '-'}</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={(e) => onOpen(e, row, phone)}
+      aria-label={`Hantar mesej WhatsApp kepada ${row.nama}, ${phone}`}
+      className="text-blue-600 hover:text-blue-800 hover:underline rounded px-1 py-0.5 -mx-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+    >
+      {phone}
+    </button>
+  );
 }
 
 type SortKey = 'age_asc' | 'age_desc' | 'nama_asc' | 'nama_desc' | 'created_at_desc' | 'created_at_asc';
@@ -55,6 +79,19 @@ export default function Home() {
   const [parlimen, setParlimen] = useState('');
   const [dun, setDun] = useState('');
   const [universitiOnly, setUniversitiOnly] = useState(false);
+
+  const [activeContact, setActiveContact] = useState<{ nama: string; phone: string; dun: string; parlimen: string } | null>(null);
+  const contactTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const openContact = useCallback((e: React.MouseEvent<HTMLButtonElement>, row: Siswa, phone: string) => {
+    contactTriggerRef.current = e.currentTarget;
+    setActiveContact({ nama: row.nama, phone, dun: row.dun, parlimen: row.parlimen });
+  }, []);
+
+  const closeContact = useCallback(() => {
+    setActiveContact(null);
+    contactTriggerRef.current?.focus();
+  }, []);
 
   const dNama = useDebounce(nama, 300);
   const dAlamat = useDebounce(alamat, 300);
@@ -262,11 +299,11 @@ export default function Home() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">Memuatkan data...</td>
+                  <td colSpan={11} className="px-4 py-8 text-center text-gray-400">Memuatkan data...</td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">Tiada data ditemui</td>
+                  <td colSpan={11} className="px-4 py-8 text-center text-gray-400">Tiada data ditemui</td>
                 </tr>
               ) : (
                 data.map((row, i) => (
@@ -275,8 +312,12 @@ export default function Home() {
                     <td className="px-4 py-2 font-medium text-gray-900 whitespace-nowrap">{row.nama}</td>
                     <td className="px-4 py-2 text-gray-600">{row.age}</td>
                     <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{row.ipta}</td>
-                    <td className="px-4 py-2 text-gray-600 font-mono text-xs whitespace-nowrap">{row.no_tel || '-'}</td>
-                    <td className="px-4 py-2 text-gray-600 font-mono text-xs whitespace-nowrap">{row.alt_number || '-'}</td>
+                    <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
+                      <PhoneCell row={row} phone={row.no_tel} onOpen={openContact} />
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
+                      <PhoneCell row={row} phone={row.alt_number} onOpen={openContact} />
+                    </td>
                     <td className="px-4 py-2">
                       <span className={`inline-block px-2 py-0.5 text-xs rounded-full font-medium ${
                         row.dun === 'Pemanis' ? 'bg-blue-100 text-blue-700' :
@@ -297,6 +338,16 @@ export default function Home() {
           </table>
         </div>
       </div>
+
+      {activeContact && (
+        <WhatsAppModal
+          key={`${activeContact.nama}-${activeContact.phone}`}
+          nama={activeContact.nama}
+          phone={activeContact.phone}
+          defaultMessage={buildDefaultMessage(activeContact)}
+          onClose={closeContact}
+        />
+      )}
     </div>
   );
 }
